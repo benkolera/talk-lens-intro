@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Just Enough Lens to be Dangerous</title>
+<meta name="author" content="(Ben Kolera)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="./reveal.js/css/reveal.css"/>
+
+<link rel="stylesheet" href="./reveal.js/css/theme/sky.css" id="theme"/>
+
+<link rel="stylesheet" href="custom.css"/>
+<link rel="stylesheet" href="./reveal.js/lib/css/zenburn.css"/>
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide" data-background="./images/seeyouinhellsoldierboy.jpg"><div class='title'><h1>Just Enough Lens to be Dangerous</h1><h2>Ben Kolera</h2></div>
+</section>
+
+<section>
+<section id="slide-orgb5221c1">
+<h2 id="orgb5221c1">Intro</h2>
+<p>
+(Note: speaker notes are accessible by pressing "s" or reading the org file directly)
+</p>
+</section>
+<section id="slide-orgf05b4df">
+<h3 id="orgf05b4df">Lenses are critical to my day-to-day Haskelling</h3>
+<aside class="notes">
+<p>
+In fact, it's pretty much my prelude these days.
+</p>
+
+</aside>
+</section>
+<section id="slide-org2c66b87">
+<h3 id="org2c66b87">Knowing where to start is a daunting task</h3>
+<aside class="notes">
+<p>
+The encoding is more complicated than you'd think because there is 10 years
+of experience behind it.
+</p>
+
+</aside>
+</section>
+<section id="slide-org307761d">
+<h3 id="org307761d">But 90% of my lensing is done with about 10 types and functions</h3>
+</section>
+<section id="slide-orgb2dd9b7">
+<h3 id="orgb2dd9b7">This talk aims to teach these and only these</h3>
+<aside class="notes">
+<p>
+Because you can get huge practical benefits without getting bogged down in the
+minutia and history.
+</p>
+
+</aside>
+</section>
+<section id="slide-org57e778e">
+<h3 id="org57e778e">Learning the details and history is important, but can come later!</h3>
+<aside class="notes">
+<ul>
+<li>I found that initially going too deep too early slowed me down.</li>
+<li>It was much better to learn it in waves instead of all at once.</li>
+<li>This is the first wave that you'll need.</li>
+
+</ul>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-org2dd9e59">
+<h2 id="org2dd9e59">Optics</h2>
+<div class="outline-text-2" id="text-org2dd9e59">
+</div>
+</section>
+<section id="slide-orgbea5368">
+<h3 id="orgbea5368">A Universal API for immutable data access and modification</h3>
+</section>
+<section id="slide-orga11647f">
+<h3 id="orga11647f">Composition of getters and setters through lenses and prisms</h3>
+</section>
+<section id="slide-org27eead7">
+<h3 id="org27eead7">If you have nested immutable data, they will make your life easier</h3>
+</section>
+<section id="slide-orgd23cecf">
+<h3 id="orgd23cecf">These Days I always create lenses for my types</h3>
+<aside class="notes">
+<p>
+I fought this for a while on YAGNI grounds, but they are ubiquitous enough
+that I end up almost getting sad if I don't create them.
+</p>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-org911b619">
+<h2 id="org911b619">Lens</h2>
+<p>
+A getter / setter pair for focusing on a single part of a product.
+</p>
+</section>
+<section id="slide-org5048a51">
+<h3 id="org5048a51">The definition (mostly)</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >lens
+  :: (s -> a)       -- Getter
+  -> (s -> a -> s)  -- Setter
+  -> Lens' s a      -- A Monomormorphic lens
+</code></pre>
+</div>
+<aside class="notes">
+<p>
+The actual type is a little more complicated but this is still valid type. It
+just hides some details for now.
+</p>
+
+</aside>
+</section>
+<section id="slide-org8758c5d">
+<h3 id="org8758c5d">Defining By Hand</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >import Control.Lens
+
+data Person = Person { _pName :: Text, _pAge :: Int } deriving Show
+
+pName :: Lens Person Text
+pName = lens _pName (\person n -> person { name = n })
+
+ben = Person "Ben" 32
+
+ben ^. pName
+-- "Ben"
+
+ben & pName .~ "Ben Kolera"
+-- Person { _pName = "Ben Kolera", pAge = 32 }
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>We create our lens with a getter using the record accessor and a setter.</li>
+<li>We can use that lens to get a value out or set a value in the structure.</li>
+<li>(^.) is read as view</li>
+<li>(.~) is read as set</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org36cfb84">
+<h3 id="org36cfb84">Defining with Template Haskell</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >import Control.Lens.TH
+
+data SocialMedia = SocialMedia { _smTwitter :: Text } deriving Show
+makeLenses ''SocialMedia -- Gives us a lens for each field
+
+data Person = Person
+  { _pName :: Text, _pSMedia :: SocialMedia } deriving Show
+makeLenses ''Person -- Gives us the same lenses as before
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>We can generate the same stuff via TH in lens.</li>
+<li>It makes a lens for each record accessor but without the underscore.</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org3bfa679">
+<h3 id="org3bfa679">The power is in the composition</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >-- Get my twitter handle
+ben ^. pSMedia . smTwitter
+-- "benkolera"
+
+-- Update my handle to a much cooler one. ;)
+ben & pSMedia . smTwitter .~ "rbdashy"
+-- Person {
+--    _pName = "Ben",
+--    _pSMedia = SocialMedia { _smTwitter = "rbdashy" }
+-- }
+</code></pre>
+</div>
+<aside class="notes">
+<p>
+We can compose two lenses together to get/set a sub structure.
+</p>
+
+</aside>
+</section>
+<section >
+<div class="org-src-container">
+
+<pre><code class="haskell" >-- You can even chain multiple updates!
+ben
+  & pName .~ "Rainbow Dash"
+  & pSMedia . smTwitter .~ "rbdashy"
+-- Person {
+--    _pName = "Rainbow Dash",
+--    _pSMedia = SocialMedia { _smTwitter = "rbdashy" }
+-- }
+</code></pre>
+</div>
+<aside class="notes">
+<p>
+And we can do multiple updates at once too. More on (&amp;) later.
+</p>
+
+</aside>
+</section>
+<section id="slide-org3e656a4">
+<h3 id="org3e656a4">Setters Demystified</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >:t pName .~ "Ben K"
+-- Person -> Person
+
+:t (& pName .~ "Ben K" (& pSMedia . smTwitter .~ "newben"))
+-- Person -> Person
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>Applying set just returns a function from state to state.</li>
+<li>(&amp;) chains them together to a value piped in from the left.</li>
+<li>The parens are only necessary because of the section.</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org4cbfa4e">
+<h3 id="org4cbfa4e">Over</h3>
+<p>
+Modify based on the current value.
+</p>
+<div class="org-src-container">
+
+<pre><code class="haskell" >ben & pSMedia . smTwitter %~ ("https://twitter.com/" <>)
+</code></pre>
+</div>
+</section>
+<section id="slide-orgc66fca6">
+<h3 id="orgc66fca6">STAB Demystified</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >-- From earlier, we hid some of the truth
+type Lens' s a = Lens s s a a
+
+lens :: (s -> a) (s -> b -> t) -> Lens s t a b
+
+data Box a = Box { _unBox :: a } deriving Show
+makeLenses ''Box
+
+:t unBox
+-- Lens (Box a) (Box b) a b
+-- Allows us to do this:
+:t (unBox %~ intToStr)
+-- Box Int -> Box String
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>But lens actually has two types for the state and two types for output</li>
+<li>This allows us to transform polymorphic structures and have the types line up.</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org61ee1ae">
+<h3 id="org61ee1ae">Getters</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >-- (^.) doesn't actually need a whole lens.
+(^.) :: s -> Getting a s a -> a
+
+getTwitterLink :: Getting Text SocialMedia Text
+getTwitterLink = to ("https://twitter.com/" <>)
+
+ben ^. pSMedia . smTwitter . getTwitterLink
+-- "https://twitter.com/benkolera"
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>view doesn't actually require a lens. It requires a getter.</li>
+<li>We can lift any function to a getter with to and compose a getter with a lens.</li>
+
+</ul>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-org2c87f56">
+<h2 id="org2c87f56">Prism</h2>
+<p>
+Prisms model the constructors of Sum types and the values within each
+constructor which may or may not be present.
+</p>
+
+<p class="fragment (appear)">
+They can also model other kinds of partial transformations like Text -&gt; JSON.
+</p>
+</section>
+<section id="slide-org41892b3">
+<h3 id="org41892b3">Defining</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >data UserId = InternalId Int | TwitterUser Text
+
+_InternalId :: Prism' UserId Int
+_InternalId = prism'
+  InternalId $ -- The constructor
+  \case        -- Pattern matching the possible value
+    (InternalId i) -> Just i
+    _              -> Nothing
+
+_TwitterUser :: Prism' UserId Text
+_TwitterUser = prism' TwitterUser $ \case
+  (TwitterUser t) -> Just t
+  _               -> Nothing
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>There is usually a prism defined per constructor</li>
+<li>Each prism has a constructor and a partial function pulling out the possible
+value from the state type (if the value matches this constructor).</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org3eb721e">
+<h3 id="org3eb721e">Defining (Template Haskell)</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >data UserId = InternalId Int | TwitterUser Text
+makePrisms ''UserId
+
+-- Defines _InternalId :: Prism UserId Int and _TwitterUser ...
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>Or we can define the same thing with TH</li>
+<li>It makes a prism for each constructor name with an _ prefix.</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-org896cf6d">
+<h3 id="org896cf6d">Extracting via Prism</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >data UserId = InternalId Int | TwitterUser Text deriving Show
+makePrisms ''UserId
+
+data Person = { _personId :: UserId } deriving Show
+makeLenses ''Person
+
+-- Prisms compose to lenses to make a traversal of 0-1 elements
+-- (^? / preview gets the first thing in a traversal)
+testP = Person (InternalId 4)
+testP ^? personId . _InternalId  == Just 4
+testP ^? personId . _TwitterUser == Nothing
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>Prisms compose to lenses to make a traversal</li>
+<li>We can extract the first element of a traversal with preview</li>
+<li>We get back Nothing or Just</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-orgcbd0d67">
+<h3 id="orgcbd0d67">Setting via Prism</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >testP = Person (InternalId 4)
+testP & personId . _InternalId .~ 42
+-- Person { _personId = InternalId 42 }
+testP & personId . _TwitterUser .~ "benkolera"
+-- Person { _personId = InternalId 4 }
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>And we can also set. The set just have no effect if it wasn't the constructor
+that is present.</li>
+
+</ul>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-orge7beabc">
+<h2 id="orge7beabc">Quick Extras</h2>
+<div class="outline-text-2" id="text-orge7beabc">
+</div>
+</section>
+<section id="slide-orgfe280f6">
+<h3 id="orgfe280f6">Isos</h3>
+<p>
+Total mappings between two types. E.g.
+</p>
+<div class="org-src-container">
+
+<pre><code class="haskell" >packed :: Iso' String Text
+
+pack x ≡ x ^. packed
+unpack x ≡ x ^. from packed
+
+-- We can extract our text field and output it as a string
+testPerson ^. personId . _TwitterUser . from packed
+-- Nothing :: Maybe String
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>There are also things stronger than a prism that map totally between both types.</li>
+<li>The Iso from Text -&gt; String is a good example.</li>
+<li>from switches it around to make an flipped prism (in essense)</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-orgca4601b">
+<h3 id="orgca4601b">Wrapped</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >newtype PersonName = PersonName Text deriving Show
+makeWrapped ''PersonName
+
+data Person = { _personName :: PersonName } deriving Show
+makeLenses ''Person
+
+testPerson = Person (PersonName "Ben")
+testPerson ^. personName . from _Wrapped
+-- "Ben" :: Text
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>If you have lots of types, then you'll probably have newtypes.</li>
+<li>Wrapped gives you a way to have an iso between your newtype and the inner type.</li>
+
+</ul>
+
+</aside>
+</section>
+<section id="slide-orga272302">
+<h3 id="orga272302">At</h3>
+<div class="org-src-container">
+
+<pre><code class="haskell" >import qualified Data.Map as Map
+
+Map.fromList [(1, "world")] ^.at 1
+-- Just "world"
+
+Map.empty & at 1 .~ Just "world"
+-- fromList [(1,"world")]
+
+Map.fromList [(1, "world")] & at 1 %~ ("Hello " <>)
+-- fromList [(1,"Hello world")]
+</code></pre>
+</div>
+<aside class="notes">
+<ul>
+<li>At gives you a way to update indexed structures as a lens. Very handy for maps and vectors.</li>
+<li>Ix is a cousin that is a prism rather than a lens. The difference is subtle.</li>
+<li>Use At until you feel you need Ix (if that happens)</li>
+
+</ul>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-orgbd32fa3">
+<h2 id="orgbd32fa3">Why</h2>
+<div class="outline-text-2" id="text-orgbd32fa3">
+</div>
+</section>
+<section id="slide-orgf8ec9cb">
+<h3 id="orgf8ec9cb">Immutable data becomes easier to navigate and update</h3>
+</section>
+<section id="slide-org7235c5f">
+<h3 id="org7235c5f">Allows you to publish lenses and hide concrete constructors</h3>
+</section>
+<section id="slide-org41d4f1f">
+<h3 id="org41d4f1f">API brings forth a wealth of prewritten goodies</h3>
+<p>
+A lot of which are already in Control.Lens.
+</p>
+</section>
+<section id="slide-orgb78bb82">
+<h3 id="orgb78bb82">Lens laws keep abstractions safe and sane</h3>
+</section>
+</section>
+<section>
+<section id="slide-org18fd4b5">
+<h2 id="org18fd4b5">Further Reading</h2>
+<div class="outline-text-2" id="text-org18fd4b5">
+</div>
+</section>
+<section id="slide-orgbfd69d5">
+<h3 id="orgbfd69d5">The Lens Package</h3>
+<p>
+<a href="http://hackage.haskell.org/package/lens">http://hackage.haskell.org/package/lens</a>
+</p>
+
+<ul>
+<li>Look at the whole hierarchy diagram to see through some of the sugar coating
+in this talk.</li>
+<li>Look at all the premade stuff like Control.Exception.Lens and etc.</li>
+
+</ul>
+</section>
+<section id="slide-org6250c61">
+<h3 id="org6250c61">Ed's Talk: Lenses, Folds and Traversals</h3>
+<p>
+(2 hour talk that explains much more!)
+<a href="https://www.youtube.com/watch?v=cefnmjtAolY&amp;feature=youtu.be&amp;hd=1">https://www.youtube.com/watch?v=cefnmjtAolY&amp;feature=youtu.be&amp;hd=1</a>
+<a href="http://comonad.com/haskell/Lenses-Folds-and-Traversals-NYC.pdf">http://comonad.com/haskell/Lenses-Folds-and-Traversals-NYC.pdf</a>
+</p>
+</section>
+<section id="slide-org504731e">
+<h3 id="org504731e">Let's Lens</h3>
+<p>
+<a href="https://github.com/data61/lets-lens">https://github.com/data61/lets-lens</a>
+</p>
+
+<p>
+Lets Lens Workshop that progresses through the history of lenses, the
+implementation details and the next coming generation of lenses that don't
+exist yet in Control.Lens.
+</p>
+</section>
+<section id="slide-org4d237c4">
+<h3 id="org4d237c4">Come chat to us at QFPL :)</h3>
+<p>
+We are here to make this stuff easier. Join us on IRC or drop in upstairs for some coaching.
+</p>
+</section>
+</section>
+<section>
+<section id="slide-org4327f1f">
+<h2 id="org4327f1f">Thanks!</h2>
+<p>
+<a href="https://lens-intro.benkolera.com">https://lens-intro.benkolera.com</a>
+</p>
+</section>
+</section>
+</div>
+</div>
+<script src="./reveal.js/lib/js/head.min.js"></script>
+<script src="./reveal.js/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: false,
+rollingLinks: false,
+keyboard: true,
+overview: true,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>
