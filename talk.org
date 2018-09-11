@@ -42,7 +42,7 @@
    that I end up almost getting sad if I don't create them.
    #+END_NOTES
 * Lens
-  A getter / setter pair for focusing on a single part of a product.
+  A getter / setter pair for focussing on a single part of a product.
 ** The definition (mostly)
   #+BEGIN_SRC haskell
     lens
@@ -157,8 +157,10 @@
     -- Box Int -> Box String
   #+END_SRC
   #+BEGIN_NOTES
-  - But lens actually has two types for the state and two types for output
-  - This allows us to transform polymorphic structures and have the types line up.
+  - But lens allows for updates to polymorphic data types where the type parameter
+    can be changed by the setter.
+  - So the lens has four type params: StartState, EndState, OldValue, NewValue
+  - This allows us to lens set Box and change it from a Box Int to Box String like so.
   #+END_NOTES
 ** Getters
    #+BEGIN_SRC haskell
@@ -176,11 +178,12 @@
   - We can lift any function to a getter with to and compose a getter with a lens.
   #+END_NOTES
 * Prism
-  Prisms model the constructors of Sum types and the values within each
-  constructor which may or may not be present.
+  Prisms model the constructors of Sum types and represent a value that can be
+  gotten or set (if the value matches this constructor).
 
   #+ATTR_REVEAL: :frag (appear)
-  They can also model other kinds of partial transformations like Text -> JSON.
+  They can also model other kinds of partial transformations like Text -> JSON
+  but such things need to take great care to be lawful (hpython, waargonaut).
 ** Defining
   #+BEGIN_SRC haskell
     data UserId = InternalId Int | TwitterUser Text
@@ -244,9 +247,17 @@
   - And we can also set. The set just have no effect if it wasn't the constructor
     that is present.
   #+END_NOTES
+** Unto
+   A prism can be used as a constructor.
+
+   #+BEGIN_SRC haskell
+     -- read, unto
+     _InternalId # 4
+     -- InternalId 4
+   #+END_SRC
 * Quick Extras
 ** Isos
-   Total mappings between two types. E.g.
+   Total mappings between two types. A lens that can be flipped. E.g.
    #+BEGIN_SRC haskell
      packed :: Iso' String Text
 
@@ -254,13 +265,12 @@
      unpack x ≡ x ^. from packed
 
      -- We can extract our text field and output it as a string
-     testPerson ^. personId . _TwitterUser . from packed
-     -- Nothing :: Maybe String
+     testPerson ^? personId . _TwitterUser . from packed
    #+END_SRC
   #+BEGIN_NOTES
-  - There are also things stronger than a prism that map totally between both types.
   - The Iso from Text -> String is a good example.
-  - from switches it around to make an flipped prism (in essense)
+  - from switches it around to make an flipped lens
+  - Can get and set in both directions.
   #+END_NOTES
 ** Wrapped
    #+BEGIN_SRC haskell
@@ -270,13 +280,15 @@
      data Person = { _personName :: PersonName } deriving Show
      makeLenses ''Person
 
-     testPerson = Person (PersonName "Ben")
+     testPerson = Person ("Ben" # _Wrapped)
      testPerson ^. personName . from _Wrapped
+     testPerson & personName . from _Wrapped %~ (<> " Kolera)
      -- "Ben" :: Text
    #+END_SRC
   #+BEGIN_NOTES
   - If you have lots of types, then you'll probably have newtypes.
   - Wrapped gives you a way to have an iso between your newtype and the inner type.
+  - Because an iso is a lens and prism, you can set and get and use unto
   #+END_NOTES
 ** At
    #+BEGIN_SRC haskell
@@ -295,6 +307,7 @@
   - At gives you a way to update indexed structures as a lens. Very handy for maps and vectors.
   - Ix is a cousin that is a prism rather than a lens. The difference is subtle.
   - Use At until you feel you need Ix (if that happens)
+  - The difference is that At is a lens and Ix is a traversal.
   #+END_NOTES
 * Why
 ** Immutable data becomes easier to navigate and update
