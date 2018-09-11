@@ -1,0 +1,325 @@
+#+OPTIONS: num:nil toc:nil reveal_slide_number:nil
+#+REVEAL_TRANS: default
+#+REVEAL_THEME: sky
+#+Title: Just Enough Lens to be Dangerous
+#+Author: Ben Kolera
+#+Email: @benkolera
+#+REVEAL_ROOT: ./reveal.js/
+#+REVEAL_TITLE_SLIDE_BACKGROUND:./images/seeyouinhellsoldierboy.jpg
+#+REVEAL_PLUGINS: (highlight notes)
+#+REVEAL_EXTRA_CSS:custom.css
+
+* Intro
+ (Note: speaker notes are accessible by pressing "s" or reading the org file directly)
+** Lenses are critical to my day-to-day Haskelling
+   #+BEGIN_NOTES
+   In fact, it's pretty much my prelude these days.
+   #+END_NOTES
+** Knowing where to start is a daunting task
+   #+BEGIN_NOTES
+   The encoding is more complicated than you'd think because there is 10 years
+   of experience behind it.
+   #+END_NOTES
+** But 90% of my lensing is done with about 10 types and functions
+** This talk aims to teach these and only these
+   #+BEGIN_NOTES
+   Because you can get huge practical benefits without getting bogged down in the
+   minutia and history.
+   #+END_NOTES
+** Learning the details and history is important, but can come later!
+   #+BEGIN_NOTES
+   - I found that initially going too deep too early slowed me down.
+   - It was much better to learn it in waves instead of all at once.
+   - This is the first wave that you'll need.
+   #+END_NOTES
+* Optics
+** A Universal API for immutable data access and modification
+** Composition of getters and setters through lenses and prisms
+** If you have nested immutable data, they will make your life easier
+** These Days I always create lenses for my types
+   #+BEGIN_NOTES
+   I fought this for a while on YAGNI grounds, but they are ubiquitous enough
+   that I end up almost getting sad if I don't create them.
+   #+END_NOTES
+* Lens
+  A getter / setter pair for focusing on a single part of a product.
+** The definition (mostly)
+  #+BEGIN_SRC haskell
+    lens
+      :: (s -> a)       -- Getter
+      -> (s -> a -> s)  -- Setter
+      -> Lens' s a      -- A Monomormorphic lens
+  #+END_SRC
+  #+BEGIN_NOTES
+  The actual type is a little more complicated but this is still valid type. It
+  just hides some details for now.
+  #+END_NOTES
+** Defining By Hand
+  #+BEGIN_SRC haskell
+    import Control.Lens
+
+    data Person = Person { _pName :: Text, _pAge :: Int } deriving Show
+
+    pName :: Lens Person Text
+    pName = lens _pName (\person n -> person { name = n })
+
+    ben = Person "Ben" 32
+
+    ben ^. pName
+    -- "Ben"
+
+    ben & pName .~ "Ben Kolera"
+    -- Person { _pName = "Ben Kolera", pAge = 32 }
+  #+END_SRC
+  #+BEGIN_NOTES
+  - We create our lens with a getter using the record accessor and a setter.
+  - We can use that lens to get a value out or set a value in the structure.
+  - (^.) is read as view
+  - (.~) is read as set
+  #+END_NOTES
+** Defining with Template Haskell
+  #+BEGIN_SRC haskell
+    import Control.Lens.TH
+
+    data SocialMedia = SocialMedia { _smTwitter :: Text } deriving Show
+    makeLenses ''SocialMedia -- Gives us a lens for each field
+
+    data Person = Person
+      { _pName :: Text, _pSMedia :: SocialMedia } deriving Show
+    makeLenses ''Person -- Gives us the same lenses as before
+  #+END_SRC
+  #+BEGIN_NOTES
+  - We can generate the same stuff via TH in lens.
+  - It makes a lens for each record accessor but without the underscore.
+  #+END_NOTES
+** The power is in the composition
+  #+BEGIN_SRC haskell
+    -- Get my twitter handle
+    ben ^. pSMedia . smTwitter
+    -- "benkolera"
+
+    -- Update my handle to a much cooler one. ;)
+    ben & pSMedia . smTwitter .~ "rbdashy"
+    -- Person {
+    --    _pName = "Ben",
+    --    _pSMedia = SocialMedia { _smTwitter = "rbdashy" }
+    -- }
+  #+END_SRC
+  #+BEGIN_NOTES
+  We can compose two lenses together to get/set a sub structure.
+  #+END_NOTES
+  #+REVEAL: split
+  #+BEGIN_SRC haskell
+    -- You can even chain multiple updates!
+    ben
+      & pName .~ "Rainbow Dash"
+      & pSMedia . smTwitter .~ "rbdashy"
+    -- Person {
+    --    _pName = "Rainbow Dash",
+    --    _pSMedia = SocialMedia { _smTwitter = "rbdashy" }
+    -- }
+  #+END_SRC
+  #+BEGIN_NOTES
+  And we can do multiple updates at once too. More on (&) later.
+  #+END_NOTES
+** Setters Demystified
+  #+BEGIN_SRC haskell
+    :t pName .~ "Ben K"
+    -- Person -> Person
+
+    :t (& pName .~ "Ben K" (& pSMedia . smTwitter .~ "newben"))
+    -- Person -> Person
+  #+END_SRC
+  #+BEGIN_NOTES
+  - Applying set just returns a function from state to state.
+  - (&) chains them together to a value piped in from the left.
+  - The parens are only necessary because of the section.
+  #+END_NOTES
+** Over
+   Modify based on the current value.
+  #+BEGIN_SRC haskell
+    ben & pSMedia . smTwitter %~ ("https://twitter.com/" <>)
+  #+END_SRC
+** STAB Demystified
+  #+BEGIN_SRC haskell
+    -- From earlier, we hid some of the truth
+    type Lens' s a = Lens s s a a
+
+    lens :: (s -> a) (s -> b -> t) -> Lens s t a b
+
+    data Box a = Box { _unBox :: a } deriving Show
+    makeLenses ''Box
+
+    :t unBox
+    -- Lens (Box a) (Box b) a b
+    -- Allows us to do this:
+    :t (unBox %~ intToStr)
+    -- Box Int -> Box String
+  #+END_SRC
+  #+BEGIN_NOTES
+  - But lens actually has two types for the state and two types for output
+  - This allows us to transform polymorphic structures and have the types line up.
+  #+END_NOTES
+** Getters
+   #+BEGIN_SRC haskell
+    -- (^.) doesn't actually need a whole lens.
+    (^.) :: s -> Getting a s a -> a
+
+    getTwitterLink :: Getting Text SocialMedia Text
+    getTwitterLink = to ("https://twitter.com/" <>)
+
+    ben ^. pSMedia . smTwitter . getTwitterLink
+    -- "https://twitter.com/benkolera"
+  #+END_SRC
+  #+BEGIN_NOTES
+  - view doesn't actually require a lens. It requires a getter.
+  - We can lift any function to a getter with to and compose a getter with a lens.
+  #+END_NOTES
+* Prism
+  Prisms model the constructors of Sum types and the values within each
+  constructor which may or may not be present.
+
+  #+ATTR_REVEAL: :frag (appear)
+  They can also model other kinds of partial transformations like Text -> JSON.
+** Defining
+  #+BEGIN_SRC haskell
+    data UserId = InternalId Int | TwitterUser Text
+
+    _InternalId :: Prism' UserId Int
+    _InternalId = prism'
+      InternalId $ -- The constructor
+      \case        -- Pattern matching the possible value
+        (InternalId i) -> Just i
+        _              -> Nothing
+
+    _TwitterUser :: Prism' UserId Text
+    _TwitterUser = prism' TwitterUser $ \case
+      (TwitterUser t) -> Just t
+      _               -> Nothing
+  #+END_SRC
+  #+BEGIN_NOTES
+  - There is usually a prism defined per constructor
+  - Each prism has a constructor and a partial function pulling out the possible
+    value from the state type (if the value matches this constructor).
+  #+END_NOTES
+** Defining (Template Haskell)
+  #+BEGIN_SRC haskell
+    data UserId = InternalId Int | TwitterUser Text
+    makePrisms ''UserId
+
+    -- Defines _InternalId :: Prism UserId Int and _TwitterUser ...
+  #+END_SRC
+  #+BEGIN_NOTES
+  - Or we can define the same thing with TH
+  - It makes a prism for each constructor name with an _ prefix.
+  #+END_NOTES
+** Extracting via Prism
+  #+BEGIN_SRC haskell
+    data UserId = InternalId Int | TwitterUser Text deriving Show
+    makePrisms ''UserId
+
+    data Person = { _personId :: UserId } deriving Show
+    makeLenses ''Person
+
+    -- Prisms compose to lenses to make a traversal of 0-1 elements
+    -- (^? / preview gets the first thing in a traversal)
+    testP = Person (InternalId 4)
+    testP ^? personId . _InternalId  == Just 4
+    testP ^? personId . _TwitterUser == Nothing
+  #+END_SRC
+  #+BEGIN_NOTES
+  - Prisms compose to lenses to make a traversal
+  - We can extract the first element of a traversal with preview
+  - We get back Nothing or Just
+  #+END_NOTES
+** Setting via Prism
+  #+BEGIN_SRC haskell
+    testP = Person (InternalId 4)
+    testP & personId . _InternalId .~ 42
+    -- Person { _personId = InternalId 42 }
+    testP & personId . _TwitterUser .~ "benkolera"
+    -- Person { _personId = InternalId 4 }
+  #+END_SRC
+  #+BEGIN_NOTES
+  - And we can also set. The set just have no effect if it wasn't the constructor
+    that is present.
+  #+END_NOTES
+* Quick Extras
+** Isos
+   Total mappings between two types. E.g.
+   #+BEGIN_SRC haskell
+     packed :: Iso' String Text
+
+     pack x ≡ x ^. packed
+     unpack x ≡ x ^. from packed
+
+     -- We can extract our text field and output it as a string
+     testPerson ^. personId . _TwitterUser . from packed
+     -- Nothing :: Maybe String
+   #+END_SRC
+  #+BEGIN_NOTES
+  - There are also things stronger than a prism that map totally between both types.
+  - The Iso from Text -> String is a good example.
+  - from switches it around to make an flipped prism (in essense)
+  #+END_NOTES
+** Wrapped
+   #+BEGIN_SRC haskell
+     newtype PersonName = PersonName Text deriving Show
+     makeWrapped ''PersonName
+
+     data Person = { _personName :: PersonName } deriving Show
+     makeLenses ''Person
+
+     testPerson = Person (PersonName "Ben")
+     testPerson ^. personName . from _Wrapped
+     -- "Ben" :: Text
+   #+END_SRC
+  #+BEGIN_NOTES
+  - If you have lots of types, then you'll probably have newtypes.
+  - Wrapped gives you a way to have an iso between your newtype and the inner type.
+  #+END_NOTES
+** At
+   #+BEGIN_SRC haskell
+     import qualified Data.Map as Map
+
+     Map.fromList [(1, "world")] ^.at 1
+     -- Just "world"
+
+     Map.empty & at 1 .~ Just "world"
+     -- fromList [(1,"world")]
+
+     Map.fromList [(1, "world")] & at 1 %~ ("Hello " <>)
+     -- fromList [(1,"Hello world")]
+   #+END_SRC
+  #+BEGIN_NOTES
+  - At gives you a way to update indexed structures as a lens. Very handy for maps and vectors.
+  - Ix is a cousin that is a prism rather than a lens. The difference is subtle.
+  - Use At until you feel you need Ix (if that happens)
+  #+END_NOTES
+* Why
+** Immutable data becomes easier to navigate and update
+** Allows you to publish lenses and hide concrete constructors
+** API brings forth a wealth of prewritten goodies
+   A lot of which are already in Control.Lens.
+** Lens laws keep abstractions safe and sane
+* Further Reading
+** The Lens Package
+   http://hackage.haskell.org/package/lens
+
+   - Look at the whole hierarchy diagram to see through some of the sugar coating
+     in this talk.
+   - Look at all the premade stuff like Control.Exception.Lens and etc.
+** Ed's Talk: Lenses, Folds and Traversals
+   (2 hour talk that explains much more!)
+   https://www.youtube.com/watch?v=cefnmjtAolY&feature=youtu.be&hd=1
+   http://comonad.com/haskell/Lenses-Folds-and-Traversals-NYC.pdf
+** Let's Lens
+   https://github.com/data61/lets-lens
+
+   Lets Lens Workshop that progresses through the history of lenses, the
+   implementation details and the next coming generation of lenses that don't
+   exist yet in Control.Lens.
+** Come chat to us at QFPL :)
+   We are here to make this stuff easier. Join us on IRC or drop in upstairs for some coaching.
+* Thanks!
+  https://lens-intro.benkolera.com
